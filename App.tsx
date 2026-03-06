@@ -35,13 +35,16 @@ export default function App() {
       await signInWithEmail(email, password);
       state.setIsLoggedIn(true);
     } catch (e: any) {
-      try {
-        await signUpWithEmail(email, password);
-        state.setIsLoggedIn(true);
-      } catch (e2: any) {
-        // Firebase Auth failed - enter demo mode anyway
-        console.warn('Firebase Auth unavailable, entering demo mode:', e2.message);
-        state.setIsLoggedIn(true);
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+        // User doesn't exist, try sign up
+        try {
+          await signUpWithEmail(email, password);
+          state.setIsLoggedIn(true);
+        } catch (e2: any) {
+          Alert.alert('회원가입 오류', e2.message || '계정을 만들 수 없습니다.');
+        }
+      } else {
+        Alert.alert('로그인 오류', e.message || '로그인에 실패했습니다.');
       }
     }
   };

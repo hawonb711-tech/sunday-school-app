@@ -74,7 +74,7 @@ export default function LoginScreen({ onLogin, onGoogleLogin }: Props) {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.demo}>데모: 아무 값으로 로그인 가능</Text>
+          <Text style={styles.demo}>빈칸으로 로그인하면 데모 모드로 입장합니다</Text>
         </View>
       </KeyboardAvoidingView>
     </View>
