@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Modal, Switch } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, Switch } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { COLORS, SIZES, SHADOWS } from '../constants/theme';
+import { showAlert, showConfirm } from '../utils/alertUtils';
 import { User, ROLE_LABELS, Student, ClassGroup, Memo, SundayInfo, AttendanceStatus } from '../models/types';
 import { exportAttendance, exportMemos, exportStudentList, exportClassSummary } from '../utils/exportUtils';
 
@@ -41,22 +42,18 @@ export default function SettingsScreen({
         case '학생 명단': exportStudentList(students, classes); break;
         case '반별 출석 요약': exportClassSummary(classes, students, users, sundays, currentWeekIndex, getAttendance); break;
       }
-      Alert.alert('완료', `${type} 데이터가 CSV 파일로 다운로드되었습니다.`);
-    } catch (e) { Alert.alert('오류', '내보내기에 실패했습니다.'); }
+      showAlert('완료', `${type} 데이터가 CSV 파일로 다운로드되었습니다.`);
+    } catch (e) { showAlert('오류', '내보내기에 실패했습니다.'); }
   };
 
-  const handlePromotion = () => {
-    Alert.alert('학년 승급', `모든 학생의 학년을 1단계 올리시겠습니까?`, [
-      { text: '취소', style: 'cancel' },
-      { text: '승급 실행', onPress: () => { setShowPromotion(false); Alert.alert('완료', '학년 승급이 완료되었습니다.'); } },
-    ]);
+  const handlePromotion = async () => {
+    const ok = await showConfirm('학년 승급', '모든 학생의 학년을 1단계 올리시겠습니까?');
+    if (ok) { setShowPromotion(false); showAlert('완료', '학년 승급이 완료되었습니다.'); }
   };
 
-  const handleYearEnd = () => {
-    Alert.alert('년말 정리', `${year}년 데이터를 아카이브하시겠습니까?`, [
-      { text: '취소', style: 'cancel' },
-      { text: '실행', style: 'destructive', onPress: () => { setShowYearEnd(false); Alert.alert('완료', `${year}년 아카이브 완료`); } },
-    ]);
+  const handleYearEnd = async () => {
+    const ok = await showConfirm('년말 정리', `${year}년 데이터를 아카이브하시겠습니까?`);
+    if (ok) { setShowYearEnd(false); showAlert('완료', `${year}년 아카이브 완료`); }
   };
 
   return (
@@ -133,7 +130,7 @@ export default function SettingsScreen({
               <View style={styles.settingDivider} />
               <SettingRow label="년말 정리" onPress={() => setShowYearEnd(true)} />
               <View style={styles.settingDivider} />
-              <SettingRow label="공지사항" onPress={() => Alert.alert('공지사항', '새로운 공지사항이 없습니다.')} />
+              <SettingRow label="공지사항" onPress={() => showAlert('공지사항', '새로운 공지사항이 없습니다.')} />
             </View>
           </BlurView>
         </View>
@@ -148,10 +145,9 @@ export default function SettingsScreen({
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={() => {
-          Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
-            { text: '취소', style: 'cancel' }, { text: '로그아웃', style: 'destructive', onPress: onLogout },
-          ]);
+        <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
+          const ok = await showConfirm('로그아웃', '로그아웃 하시겠습니까?');
+          if (ok) onLogout();
         }}>
           <Text style={styles.logoutText}>로그아웃</Text>
         </TouchableOpacity>

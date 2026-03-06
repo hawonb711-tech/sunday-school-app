@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert,
+  TextInput, Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { COLORS, SIZES, SHADOWS } from '../constants/theme';
+import { showAlert, showConfirm } from '../utils/alertUtils';
 import {
   SundayInfo, Memo, MemoType, MemoScope, AttendanceStatus,
   MEMO_TYPE_LABELS, MEMO_SCOPE_LABELS, MEMO_TYPE_ICONS, MEMO_SCOPE_ICONS,
@@ -51,7 +52,7 @@ export default function MemoTimelineScreen({
 
   const handleAddMemo = () => {
     if (!memoContent.trim()) {
-      Alert.alert('알림', '메모 내용을 입력해주세요.');
+      showAlert('알림', '메모 내용을 입력해주세요.');
       return;
     }
     onAddMemo({
@@ -67,7 +68,7 @@ export default function MemoTimelineScreen({
     });
     setMemoContent('');
     setShowAddModal(false);
-    Alert.alert('완료', '메모가 추가되었습니다.');
+    showAlert('완료', '메모가 추가되었습니다.');
   };
 
   const handleEditMemo = () => {
@@ -77,21 +78,12 @@ export default function MemoTimelineScreen({
     setEditingMemo(null);
     setEditContent('');
     setEditReason('');
-    Alert.alert('완료', '메모가 수정되었습니다.');
+    showAlert('완료', '메모가 수정되었습니다.');
   };
 
-  const handleDeleteMemo = (memo: Memo) => {
-    Alert.alert(
-      '메모 삭제',
-      '이 메모를 삭제하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제', style: 'destructive',
-          onPress: () => onDeleteMemo?.(memo.id),
-        },
-      ]
-    );
+  const handleDeleteMemo = async (memo: Memo) => {
+    const ok = await showConfirm('메모 삭제', '이 메모를 삭제하시겠습니까?');
+    if (ok) onDeleteMemo?.(memo.id);
   };
 
   const openEditModal = (memo: Memo) => {

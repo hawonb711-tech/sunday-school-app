@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { showAlert } from './src/utils/alertUtils';
 import { BlurView } from 'expo-blur';
 import { useAppState } from './src/hooks/useAppState';
 import { COLORS, SIZES } from './src/constants/theme';
@@ -41,10 +42,10 @@ export default function App() {
           await signUpWithEmail(email, password);
           state.setIsLoggedIn(true);
         } catch (e2: any) {
-          Alert.alert('회원가입 오류', e2.message || '계정을 만들 수 없습니다.');
+          showAlert('회원가입 오류', e2.message || '계정을 만들 수 없습니다.');
         }
       } else {
-        Alert.alert('로그인 오류', e.message || '로그인에 실패했습니다.');
+        showAlert('로그인 오류', e.message || '로그인에 실패했습니다.');
       }
     }
   };

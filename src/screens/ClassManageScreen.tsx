@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Alert, Modal,
+  TextInput, Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { COLORS, SIZES, SHADOWS } from '../constants/theme';
 import { ClassGroup, Student, User, ROLE_LABELS } from '../models/types';
+import { showAlert, showConfirm } from '../utils/alertUtils';
 
 interface Props {
   classes: ClassGroup[];
@@ -40,34 +41,35 @@ export default function ClassManageScreen({
   const [teacherPickerClassId, setTeacherPickerClassId] = useState('');
 
   const handleAddClass = () => {
-    if (!newClassName.trim()) { Alert.alert('오류', '반 이름을 입력해주세요.'); return; }
+    if (!newClassName.trim()) { showAlert('오류', '반 이름을 입력해주세요.'); return; }
     onAddClass(newClassName.trim(), newClassGrade.trim() || '미정');
+    const name = newClassName.trim();
     setNewClassName(''); setNewClassGrade(''); setShowAddClass(false);
-    Alert.alert('완료', `"${newClassName.trim()}" 반이 생성되었습니다. (가편성)`);
+    showAlert('완료', `"${name}" 반이 생성되었습니다. (가편성)`);
   };
-  const handleConfirmClass = (cls: ClassGroup) => {
-    Alert.alert('반편성 확정', `"${cls.name}"을 확정하시겠습니까?`, [
-      { text: '취소', style: 'cancel' }, { text: '확정', onPress: () => onConfirmClass(cls.id) },
-    ]);
+  const handleConfirmClass = async (cls: ClassGroup) => {
+    const ok = await showConfirm('반편성 확정', `"${cls.name}"을 확정하시겠습니까?`);
+    if (ok) onConfirmClass(cls.id);
   };
   const handleAddStudent = () => {
-    if (!newStudentName.trim()) { Alert.alert('오류', '학생 이름을 입력해주세요.'); return; }
+    if (!newStudentName.trim()) { showAlert('오류', '학생 이름을 입력해주세요.'); return; }
     onAddStudent(newStudentName.trim(), addStudentClassId, parseInt(newStudentGrade) || 3, newStudentParent.trim() || undefined, newStudentPhone.trim() || undefined);
+    const name = newStudentName.trim();
     setNewStudentName(''); setNewStudentGrade('3'); setNewStudentParent(''); setNewStudentPhone(''); setShowAddStudent(false);
-    Alert.alert('완료', `"${newStudentName.trim()}" 학생이 추가되었습니다.`);
+    showAlert('완료', `"${name}" 학생이 추가되었습니다.`);
   };
-  const handleToggleStudent = (student: Student) => {
-    Alert.alert(student.isActive ? '비활성화' : '활성화', `"${student.name}" 학생을 ${student.isActive ? '비활성화' : '활성화'}하시겠습니까?`, [
-      { text: '취소', style: 'cancel' }, { text: '확인', onPress: () => onToggleStudentActive(student.id) },
-    ]);
+  const handleToggleStudent = async (student: Student) => {
+    const action = student.isActive ? '비활성화' : '활성화';
+    const ok = await showConfirm(action, `"${student.name}" 학생을 ${action}하시겠습니까?`);
+    if (ok) onToggleStudentActive(student.id);
   };
+  const [showMoveStudent, setShowMoveStudent] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<Student | null>(null);
   const handleMoveStudent = (student: Student) => {
     const otherClasses = classes.filter(c => c.id !== student.classId);
-    if (otherClasses.length === 0) { Alert.alert('알림', '이동할 다른 반이 없습니다.'); return; }
-    Alert.alert('반 이동', `"${student.name}" 학생을 어디로 이동하시겠습니까?`, [
-      ...otherClasses.map(c => ({ text: c.name, onPress: () => { onMoveStudent(student.id, c.id); Alert.alert('완료', `${student.name} → ${c.name} 이동 완료`); } })),
-      { text: '취소', style: 'cancel' as const },
-    ]);
+    if (otherClasses.length === 0) { showAlert('알림', '이동할 다른 반이 없습니다.'); return; }
+    setMoveTarget(student);
+    setShowMoveStudent(true);
   };
 
   const allTeachers = users.filter(u => u.role === 'teacher' || u.role === 'assistant' || u.role === 'headTeacher');
@@ -139,7 +141,7 @@ export default function ClassManageScreen({
                           <View style={[styles.dot, { backgroundColor: COLORS.primary }]} />
                           <Text style={styles.memberName}>{t.name}</Text>
                           <Text style={styles.memberRole}>{ROLE_LABELS[t.role]}</Text>
-                          <TouchableOpacity onPress={() => Alert.alert('교사 제거', `${t.name}을(를) 제거하시겠습니까?`, [{ text: '취소', style: 'cancel' }, { text: '제거', style: 'destructive', onPress: () => onRemoveTeacherFromClass(cls.id, t.id) }])}>
+                          <TouchableOpacity onPress={async () => { const ok = await showConfirm('교사 제거', `${t.name}을(를) 제거하시겠습니까?`); if (ok) onRemoveTeacherFromClass(cls.id, t.id); }}>
                             <Text style={styles.removeText}>X</Text>
                           </TouchableOpacity>
                         </View>
@@ -249,6 +251,28 @@ export default function ClassManageScreen({
         </View>
       </Modal>
 
+      {/* Move Student Modal */}
+      <Modal visible={showMoveStudent} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalWrap}>
+            <BlurView intensity={90} tint="light" style={styles.modalBlur}>
+              <View style={styles.modalInner}>
+                <Text style={styles.modalTitle}>반 이동</Text>
+                <Text style={styles.modalSubtitle}>{moveTarget?.name} 학생을 어디로 이동하시겠습니까?</Text>
+                {moveTarget && classes.filter(c => c.id !== moveTarget.classId).map(c => (
+                  <TouchableOpacity key={c.id} style={styles.pickerRow}
+                    onPress={() => { onMoveStudent(moveTarget.id, c.id); setShowMoveStudent(false); showAlert('완료', `${moveTarget.name} → ${c.name} 이동 완료`); }}>
+                    <View style={styles.pickerAvatar}><Text style={styles.pickerAvatarText}>{c.name[0]}</Text></View>
+                    <Text style={styles.pickerName}>{c.name}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowMoveStudent(false)}><Text style={styles.modalCancelText}>취소</Text></TouchableOpacity>
+              </View>
+            </BlurView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Teacher Picker Modal */}
       <Modal visible={showTeacherPicker} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
@@ -262,7 +286,7 @@ export default function ClassManageScreen({
                   const alreadyIn = cls?.teacherIds.includes(t.id);
                   return (
                     <TouchableOpacity key={t.id} style={[styles.pickerRow, alreadyIn && { opacity: 0.4 }]} disabled={alreadyIn}
-                      onPress={() => { onAddTeacherToClass(teacherPickerClassId, t.id); setShowTeacherPicker(false); Alert.alert('완료', `${t.name}이(가) 추가되었습니다.`); }}>
+                      onPress={() => { onAddTeacherToClass(teacherPickerClassId, t.id); setShowTeacherPicker(false); showAlert('완료', `${t.name}이(가) 추가되었습니다.`); }}>
                       <View style={styles.pickerAvatar}><Text style={styles.pickerAvatarText}>{t.name[0]}</Text></View>
                       <View style={{ flex: 1 }}><Text style={styles.pickerName}>{t.name}</Text><Text style={styles.pickerRole}>{ROLE_LABELS[t.role]}</Text></View>
                       {alreadyIn && <View style={styles.addedBadge}><Text style={styles.addedText}>추가됨</Text></View>}
