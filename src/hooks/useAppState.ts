@@ -43,36 +43,29 @@ export function useAppState() {
 
   const unsubAttRef = useRef<(() => void) | null>(null);
   const unsubMemoRef = useRef<(() => void) | null>(null);
+  const firebaseAvailableRef = useRef(false);
 
   // ===== Firebase data seed (first time only) =====
   const seedDataIfNeeded = useCallback(async () => {
     try {
-      // Check if users collection exists
       const existingUsers = await getUsers();
       if (existingUsers.length > 0) {
-        return; // Data already exists
+        firebaseAvailableRef.current = true;
+        return true;
       }
 
       console.log('Seeding initial data to Firestore...');
-      // Seed users
-      for (const u of dummyUsers) {
-        await saveUser(u);
-      }
-      // Seed students
-      for (const s of dummyStudents) {
-        await saveStudent(s);
-      }
-      // Seed classes
-      for (const c of dummyClasses) {
-        await saveClass(c);
-      }
-      // Seed memos
-      for (const m of dummyMemos) {
-        await saveMemo(m);
-      }
+      for (const u of dummyUsers) await saveUser(u);
+      for (const s of dummyStudents) await saveStudent(s);
+      for (const c of dummyClasses) await saveClass(c);
+      for (const m of dummyMemos) await saveMemo(m);
       console.log('Initial data seeded successfully!');
+      firebaseAvailableRef.current = true;
+      return true;
     } catch (e) {
-      console.error('Error seeding data:', e);
+      console.error('Firebase unavailable, using offline mode:', e);
+      firebaseAvailableRef.current = false;
+      return false;
     }
   }, []);
 
@@ -80,6 +73,18 @@ export function useAppState() {
   const loadAllData = useCallback(async () => {
     try {
       setIsLoading(true);
+
+      if (!firebaseAvailableRef.current) {
+        // Offline mode - use dummy data
+        setUsers(dummyUsers);
+        setStudents(dummyStudents);
+        setClasses(dummyClasses);
+        setMemos(dummyMemos);
+        setCurrentUser(dummyUsers[1]);
+        setFirebaseReady(true);
+        return;
+      }
+
       const [loadedUsers, loadedStudents, loadedClasses, loadedAttendance, loadedMemos] = await Promise.all([
         getUsers(),
         getStudents(),
@@ -94,7 +99,6 @@ export function useAppState() {
       setAttendance(loadedAttendance);
       setMemos(loadedMemos);
 
-      // Set current user from loaded users
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[1] || loadedUsers[0]);
       }
@@ -102,7 +106,6 @@ export function useAppState() {
       setFirebaseReady(true);
     } catch (e) {
       console.error('Error loading data:', e);
-      // Fallback to dummy data
       setUsers(dummyUsers);
       setStudents(dummyStudents);
       setClasses(dummyClasses);
@@ -114,14 +117,14 @@ export function useAppState() {
     }
   }, []);
 
-  // ===== Start realtime listeners =====
+  // ===== Start realtime listeners (only if Firebase available) =====
   const startListeners = useCallback(() => {
-    // Attendance realtime listener
+    if (!firebaseAvailableRef.current) return;
+
     unsubAttRef.current = listenToAttendance(YEAR, (newAttendance) => {
       setAttendance(newAttendance);
     });
 
-    // Memos realtime listener
     unsubMemoRef.current = listenToMemos((newMemos) => {
       setMemos(newMemos);
     });
@@ -174,11 +177,13 @@ export function useAppState() {
       return newMap;
     });
 
-    // Save to Firestore
-    try {
-      await saveAttendance(personId, weekIndex, YEAR, next, currentUser.id);
-    } catch (e) {
-      console.error('Error saving attendance:', e);
+    // Save to Firestore (skip if offline)
+    if (firebaseAvailableRef.current) {
+      try {
+        await saveAttendance(personId, weekIndex, YEAR, next, currentUser.id);
+      } catch (e) {
+        console.error('Error saving attendance:', e);
+      }
     }
   }, [currentWeekIndex, attendance, currentUser.id]);
 
@@ -211,11 +216,12 @@ export function useAppState() {
     // Optimistic update
     setMemos(prev => [newMemo, ...prev]);
 
-    // Save to Firestore
-    try {
-      await saveMemo(newMemo);
-    } catch (e) {
-      console.error('Error saving memo:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await saveMemo(newMemo);
+      } catch (e) {
+        console.error('Error saving memo:', e);
+      }
     }
   }, [currentUser.id]);
 
@@ -236,11 +242,12 @@ export function useAppState() {
     // Optimistic update
     setMemos(prev => prev.map(m => m.id !== memoId ? m : { ...m, ...updated }));
 
-    // Save to Firestore
-    try {
-      await updateMemo(memoId, updated);
-    } catch (e) {
-      console.error('Error updating memo:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateMemo(memoId, updated);
+      } catch (e) {
+        console.error('Error updating memo:', e);
+      }
     }
   }, [currentUser.id, currentUser.name, memos]);
 
@@ -254,11 +261,12 @@ export function useAppState() {
     // Optimistic update
     setMemos(prev => prev.map(m => m.id !== memoId ? m : { ...m, ...deleteData }));
 
-    // Save to Firestore
-    try {
-      await updateMemo(memoId, deleteData);
-    } catch (e) {
-      console.error('Error deleting memo:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateMemo(memoId, deleteData);
+      } catch (e) {
+        console.error('Error deleting memo:', e);
+      }
     }
   }, [currentUser.id]);
 
@@ -304,11 +312,12 @@ export function useAppState() {
     // Optimistic update
     setClasses(prev => [...prev, newClass]);
 
-    // Save to Firestore
-    try {
-      await saveClass(newClass);
-    } catch (e) {
-      console.error('Error saving class:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await saveClass(newClass);
+      } catch (e) {
+        console.error('Error saving class:', e);
+      }
     }
     return newClass.id;
   }, []);
@@ -317,10 +326,12 @@ export function useAppState() {
     setClasses(prev => prev.map(c =>
       c.id === classId ? { ...c, status: 'confirmed' as const } : c
     ));
-    try {
-      await updateClass(classId, { status: 'confirmed' });
-    } catch (e) {
-      console.error('Error confirming class:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateClass(classId, { status: 'confirmed' });
+      } catch (e) {
+        console.error('Error confirming class:', e);
+      }
     }
   }, []);
 
@@ -328,10 +339,12 @@ export function useAppState() {
     setClasses(prev => prev.map(c =>
       c.id === classId ? { ...c, name } : c
     ));
-    try {
-      await updateClass(classId, { name });
-    } catch (e) {
-      console.error('Error updating class name:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateClass(classId, { name });
+      } catch (e) {
+        console.error('Error updating class name:', e);
+      }
     }
   }, []);
 
@@ -343,10 +356,12 @@ export function useAppState() {
     setClasses(prev => prev.map(c =>
       c.id === classId ? { ...c, teacherIds: newTeacherIds } : c
     ));
-    try {
-      await updateClass(classId, { teacherIds: newTeacherIds });
-    } catch (e) {
-      console.error('Error adding teacher:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateClass(classId, { teacherIds: newTeacherIds });
+      } catch (e) {
+        console.error('Error adding teacher:', e);
+      }
     }
   }, [classes]);
 
@@ -358,10 +373,12 @@ export function useAppState() {
     setClasses(prev => prev.map(c =>
       c.id === classId ? { ...c, teacherIds: newTeacherIds } : c
     ));
-    try {
-      await updateClass(classId, { teacherIds: newTeacherIds });
-    } catch (e) {
-      console.error('Error removing teacher:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateClass(classId, { teacherIds: newTeacherIds });
+      } catch (e) {
+        console.error('Error removing teacher:', e);
+      }
     }
   }, [classes]);
 
@@ -385,15 +402,16 @@ export function useAppState() {
       c.id === classId ? { ...c, studentIds: [...c.studentIds, newStudent.id] } : c
     ));
 
-    // Save to Firestore
-    try {
-      await saveStudent(newStudent);
-      const cls = classes.find(c => c.id === classId);
-      if (cls) {
-        await updateClass(classId, { studentIds: [...cls.studentIds, newStudent.id] });
+    if (firebaseAvailableRef.current) {
+      try {
+        await saveStudent(newStudent);
+        const cls = classes.find(c => c.id === classId);
+        if (cls) {
+          await updateClass(classId, { studentIds: [...cls.studentIds, newStudent.id] });
+        }
+      } catch (e) {
+        console.error('Error saving student:', e);
       }
-    } catch (e) {
-      console.error('Error saving student:', e);
     }
     return newStudent.id;
   }, [classes]);
@@ -402,10 +420,12 @@ export function useAppState() {
     setStudents(prev => prev.map(s =>
       s.id === studentId ? { ...s, ...data } : s
     ));
-    try {
-      await updateStudent(studentId, data);
-    } catch (e) {
-      console.error('Error updating student:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateStudent(studentId, data);
+      } catch (e) {
+        console.error('Error updating student:', e);
+      }
     }
   }, []);
 
@@ -422,10 +442,12 @@ export function useAppState() {
     setStudents(prev => prev.map(s =>
       s.id !== studentId ? s : { ...s, ...updatedData }
     ));
-    try {
-      await updateStudent(studentId, updatedData);
-    } catch (e) {
-      console.error('Error toggling student:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateStudent(studentId, updatedData);
+      } catch (e) {
+        console.error('Error toggling student:', e);
+      }
     }
   }, [students]);
 
@@ -448,19 +470,20 @@ export function useAppState() {
       return c;
     }));
 
-    // Save to Firestore
-    try {
-      await updateStudent(studentId, { classId: newClassId });
-      const oldCls = classes.find(c => c.id === oldClassId);
-      const newCls = classes.find(c => c.id === newClassId);
-      if (oldCls) {
-        await updateClass(oldClassId, { studentIds: oldCls.studentIds.filter(id => id !== studentId) });
+    if (firebaseAvailableRef.current) {
+      try {
+        await updateStudent(studentId, { classId: newClassId });
+        const oldCls = classes.find(c => c.id === oldClassId);
+        const newCls = classes.find(c => c.id === newClassId);
+        if (oldCls) {
+          await updateClass(oldClassId, { studentIds: oldCls.studentIds.filter(id => id !== studentId) });
+        }
+        if (newCls) {
+          await updateClass(newClassId, { studentIds: [...newCls.studentIds, studentId] });
+        }
+      } catch (e) {
+        console.error('Error moving student:', e);
       }
-      if (newCls) {
-        await updateClass(newClassId, { studentIds: [...newCls.studentIds, studentId] });
-      }
-    } catch (e) {
-      console.error('Error moving student:', e);
     }
   }, [students, classes]);
 
@@ -480,18 +503,19 @@ export function useAppState() {
       return newMap;
     });
 
-    // Save each to Firestore
-    try {
-      const promises = [...classStudents, ...classTeachers].map(person => {
-        const current = attendance.get(person.id)?.get(weekIndex) || 'untouched';
-        if (current === 'untouched') {
-          return saveAttendance(person.id, weekIndex, YEAR, 'present', currentUser.id);
-        }
-        return Promise.resolve();
-      });
-      await Promise.all(promises);
-    } catch (e) {
-      console.error('Error marking all present:', e);
+    if (firebaseAvailableRef.current) {
+      try {
+        const promises = [...classStudents, ...classTeachers].map(person => {
+          const current = attendance.get(person.id)?.get(weekIndex) || 'untouched';
+          if (current === 'untouched') {
+            return saveAttendance(person.id, weekIndex, YEAR, 'present', currentUser.id);
+          }
+          return Promise.resolve();
+        });
+        await Promise.all(promises);
+      } catch (e) {
+        console.error('Error marking all present:', e);
+      }
     }
   }, [currentWeekIndex, classStudents, classTeachers, attendance, currentUser.id]);
 
